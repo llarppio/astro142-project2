@@ -103,5 +103,38 @@ def make_rgb():
     plt.savefig("../plots/xdf_rgb.png", dpi=300)
     print("saved")
 
+def build_rgb_cube():
+    """
+    """
+    # red = F814W, green = F606W, blue = F435W
+    r_data, r_wcs = load_fits("../data/hlsp_xdf_hst_acswfc-60mas_hudf_f814w_v1_sci.fits")
+    g_data, g_wcs = load_fits("../data/hlsp_xdf_hst_acswfc-60mas_hudf_f606w_v1_sci.fits")
+    b_data, b_wcs = load_fits("../data/hlsp_xdf_hst_acswfc-60mas_hudf_f435w_v1_sci.fits")
+
+    ny, nx = r_data.shape
+
+    # match the other bands onto the red WCS
+    b_cut = match_cutout(b_data, b_wcs, r_wcs, ny, nx)
+    g_cut = match_cutout(g_data, g_wcs, r_wcs, ny, nx)
+    r_cut = r_data.copy()
+
+    # enforce a common shape explicitly
+    hmin = min(r_cut.shape[0], g_cut.shape[0], b_cut.shape[0])
+    wmin = min(r_cut.shape[1], g_cut.shape[1], b_cut.shape[1])
+
+    r_cut = r_cut[:hmin, :wmin]
+    g_cut = g_cut[:hmin, :wmin]
+    b_cut = b_cut[:hmin, :wmin]
+
+    # scale each band (you can swap in your tuned p_low/p_high/boost here if you want)
+    r = scale_band(r_cut)
+    g = scale_band(g_cut)
+    b = scale_band(b_cut)
+
+    # now guaranteed same shape
+    rgb = np.dstack([r, g, b])
+
+    return rgb, r_wcs, hmin, wmin
+
 if __name__ == "__main__":
     make_rgb()
