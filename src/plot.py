@@ -9,6 +9,9 @@ import astropy.units as u
 from make_rgb_mosaic import load_fits, match_cutout, scale_band
 from redshift_catalogs import crossmatch_photoz_specz
 
+import logging
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 def make_rgb_for_overlay():
     """Build XDF HUDF RGB and return fig, ax, WCS, and trimmed shape"""
@@ -48,7 +51,16 @@ def make_rgb_for_overlay():
 
 
 def overlay_redshifts(ax, r_wcs, hmin, wmin):
+    """
+    overlays photometric-only and matched photo+spec galaxies
+    """
+
     photo, spec, matched = crossmatch_photoz_specz()
+    logger.info(f"Overlaying {len(photo)} photo-z and {len(matched)} matched photo+spec galaxies")
+    
+    if len(photo) == 0:
+        logger.warning("No photometric redshift sources found")
+        return 
 
     # Convert to sky coords
     c_photo = SkyCoord(photo["ra"]*u.deg, photo["dec"]*u.deg)

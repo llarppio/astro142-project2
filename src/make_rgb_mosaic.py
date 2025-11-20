@@ -1,11 +1,9 @@
 """
-This script is to create an RGB HUDF mosaic using:
-    blue: HLF GOODS-S F435W (60mas)
-    green: HLF GOOD-S F606W (60mas)
-    red: XDF HUDF F814W (60mas) <- chose this because my red was too blue before
-    
-    then: save as a png
+This script combines red, green, and blue wavelengths of the Hubble Deep Field images taken from hlsp_xdf_hst_acswfc
 """
+import logging
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 import numpy as np
 from astropy.io import fits
@@ -18,6 +16,10 @@ from astropy.wcs.utils import pixel_to_skycoord, skycoord_to_pixel
 def load_fits(filename):
     data, hdr = fits.getdata(filename, header=True)
     wcs = WCS(hdr)
+    if data.ndim !=2:
+        msg = f"Expected 2D image in {filename}, got shape {data.shape}"
+        logger.error(msg)
+        raise ValueError(msg)
     return data.astype(np.float32), wcs
 
 def match_cutout(source_data, source_wcs, ref_wcs, ny, nx):
@@ -40,13 +42,18 @@ def match_cutout(source_data, source_wcs, ref_wcs, ny, nx):
     xmax = int(np.max(sx))
     ymin = int(np.min(sy))
     ymax = int(np.max(sy))
+    
+    if xmax <= xmin or ymax <= ymin:
+        msg = "Computed cutout has non-positive size"
+        logger.error(msg)
+        raise ValueError(msg)
 
     return source_data[ymin:ymax, xmin:xmax]
 
 def scale_band(data, p_low=1.0, p_high=99.7):
     lo, hi = np.percentile(data, [p_low, p_high])
     if hi <= lo:
-        # avoid divide-by-zero if something pathological happens
+        # avoid divide-by-zero
         return np.zeros_like(data, dtype=np.float32)
 
     scaled = np.clip((data - lo) / (hi - lo), 0, 1)
@@ -56,7 +63,7 @@ def scale_band(data, p_low=1.0, p_high=99.7):
 
 def make_rgb_and_axes():
     """
-    Build the XDF RGB mosaic and return fig, ax, WCS, and cutout shape.
+    Build the XDF RGB mosaic 
     """
     r_data, r_wcs = load_fits("../data/hlsp_xdf_hst_acswfc-60mas_hudf_f814w_v1_sci.fits")
     g_data, g_wcs = load_fits("../data/hlsp_xdf_hst_acswfc-60mas_hudf_f606w_v1_sci.fits")
@@ -70,12 +77,12 @@ def make_rgb_and_axes():
 
     hmin = min(b_cut.shape[0], g_cut.shape[0], r_cut.shape[0])
     wmin = min(b_cut.shape[1], g_cut.shape[1], r_cut.shape[1])
+    logger.info(f"Common mosaic shape: {hmin} x {wmin}")
 
     b_cut = b_cut[:hmin, :wmin]
     g_cut = g_cut[:hmin, :wmin]
     r_cut = r_cut[:hmin, :wmin]
 
-    # you can keep these simple, or plug in your tuned parameters
     r = scale_band(r_cut)
     g = scale_band(g_cut)
     b = scale_band(b_cut)
@@ -105,6 +112,7 @@ def make_rgb():
 
 def build_rgb_cube():
     """
+    This function gives us the rgb array, wcs object for reference, hmin and wmin, rather than an image. This way we can go in and cut stuff out for the insets!
     """
     # red = F814W, green = F606W, blue = F435W
     r_data, r_wcs = load_fits("../data/hlsp_xdf_hst_acswfc-60mas_hudf_f814w_v1_sci.fits")
